@@ -635,3 +635,35 @@ _C.VIS_PERIOD = 0
 # Do not commit any configs into it.
 _C.GLOBAL = CN()
 _C.GLOBAL.HACK = 1.0
+
+# ---------------------------------------------------------------------------- #
+# FCOS Options
+# ---------------------------------------------------------------------------- #
+_C.MODEL.FCOS = CN()
+_C.MODEL.FCOS.NUM_CLASSES = 80  # the number of classes not including background
+_C.MODEL.FCOS.IN_FEATURES = ["p3", "p4", "p5", "p6", "p7"]
+_C.MODEL.FCOS.FPN_STRIDES = [8, 16, 32, 64, 128]
+_C.MODEL.FCOS.PRIOR_PROB = 0.01
+_C.MODEL.FCOS.INFERENCE_TH = 0.05
+_C.MODEL.FCOS.NMS_TH = 0.6
+_C.MODEL.FCOS.PRE_NMS_TOP_N = 1000
+
+# Focal loss parameter: alpha
+_C.MODEL.FCOS.LOSS_ALPHA = 0.25
+# Focal loss parameter: gamma
+_C.MODEL.FCOS.LOSS_GAMMA = 2.0
+
+# the number of convolutions used in the cls and bbox tower
+_C.MODEL.FCOS.NUM_CONVS = 4
+
+# if CENTER_SAMPLING_RADIUS <= 0, it will disable center sampling
+_C.MODEL.FCOS.CENTER_SAMPLING_RADIUS = 0.0
+# IOU_LOSS_TYPE can be "iou", "linear_iou" or "giou"
+_C.MODEL.FCOS.IOU_LOSS_TYPE = "iou"
+
+_C.MODEL.FCOS.NORM_REG_TARGETS = False
+_C.MODEL.FCOS.CENTERNESS_ON_REG = False
+
+_C.MODEL.FCOS.USE_DCN_IN_TOWER = False
+
+_C.MODEL.FCOS.TRAIN_PART = 'all'

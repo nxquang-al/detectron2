@@ -178,6 +178,7 @@ Category ids in annotations are not in [1, #categories]! We'll apply a mapping f
                 )
 
             segm = anno.get("segmentation", None)
+            bo_segm = anno.get("bg_object_segmentation", None)
             if segm:  # either list[list[float]] or dict(RLE)
                 if isinstance(segm, dict):
                     if isinstance(segm["counts"], list):
@@ -190,6 +191,7 @@ Category ids in annotations are not in [1, #categories]! We'll apply a mapping f
                         num_instances_without_valid_segmentation += 1
                         continue  # ignore this instance
                 obj["segmentation"] = segm
+                obj["bg_object_segmentation"] = bo_segm
 
             keypts = anno.get("keypoints", None)
             if keypts:  # list[int]

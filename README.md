@@ -1,57 +1,42 @@
-<img src=".github/Detectron2-Logo-Horz.svg" width="300" >
+This is a merge between [Detectron2 (version 0.6)](https://github.com/facebookresearch/detectron2) and [BCNet](https://github.com/lkeab/BCNet).
 
-Detectron2 is Facebook AI Research's next generation library
-that provides state-of-the-art detection and segmentation algorithms.
-It is the successor of
-[Detectron](https://github.com/facebookresearch/Detectron/)
-and [maskrcnn-benchmark](https://github.com/facebookresearch/maskrcnn-benchmark/).
-It supports a number of computer vision research projects and production applications in Facebook.
+## Quick Install guide
 
-<div align="center">
-  <img src="https://user-images.githubusercontent.com/1381301/66535560-d3422200-eace-11e9-9123-5535d469db19.png"/>
-</div>
+This is a quickstart for people already familiar with Detectron2.  If you are not familar then you will want to reference to the Detectron2 guides.
 
-### What's New
-* Includes new capabilities such as panoptic segmentation, Densepose, Cascade R-CNN, rotated bounding boxes, PointRend,
-  DeepLab, etc.
-* Used as a library to support building [research projects](projects/) on top of it.
-* Models can be exported to TorchScript format or Caffe2 format for deployment.
-* It [trains much faster](https://detectron2.readthedocs.io/notes/benchmarks.html).
+This assumes you have a fresh virtual environment with python 3.8
 
-See our [blog post](https://ai.facebook.com/blog/-detectron2-a-pytorch-based-modular-object-detection-library-/)
-to see more demos and learn about detectron2.
+1) PIP install the correct version of Pytorch based on your OS and CUDA versions: https://pytorch.org/get-started/locally/
 
-## Installation
-
-See [installation instructions](https://detectron2.readthedocs.io/tutorials/install.html).
-
-## Getting Started
-
-See [Getting Started with Detectron2](https://detectron2.readthedocs.io/tutorials/getting_started.html),
-and the [Colab Notebook](https://colab.research.google.com/drive/16jcaJoc6bCFAQ96jDe2HwtXj7BMD_-m5)
-to learn about basic usage.
-
-Learn more at our [documentation](https://detectron2.readthedocs.org).
-And see [projects/](projects/) for some projects that are built on top of detectron2.
-
-## Model Zoo and Baselines
-
-We provide a large set of baseline results and trained models available for download in the [Detectron2 Model Zoo](MODEL_ZOO.md).
-
-## License
-
-Detectron2 is released under the [Apache 2.0 license](LICENSE).
-
-## Citing Detectron2
-
-If you use Detectron2 in your research or wish to refer to the baseline results published in the [Model Zoo](MODEL_ZOO.md), please use the following BibTeX entry.
-
-```BibTeX
-@misc{wu2019detectron2,
-  author =       {Yuxin Wu and Alexander Kirillov and Francisco Massa and
-                  Wan-Yen Lo and Ross Girshick},
-  title =        {Detectron2},
-  howpublished = {\url{https://github.com/facebookresearch/detectron2}},
-  year =         {2019}
-}
+For example with CUDA 11.3+
 ```
+pip install torch==1.10.2+cu113 torchvision==0.11.3+cu113 torchaudio==0.10.2+cu113 -f https://download.pytorch.org/whl/cu113/torch_stable.html
+```
+
+2) Install packages (setuptools version matters):
+
+```
+pip install scikit-image opencv-python setuptools==59.5.0 
+```
+
+3) Clone repo and install:
+```
+git clone https://github.com/shadercloud/detectron2
+python -m pip install -e detectron2
+```
+
+## Next Steps
+
+Note that for BCNet you will need to run your normal COCO json annotation files through the `process_data.py` script which will generate an updated annotation file with additional segmentation data.  If you do not do this and try to run regular COCO json through the trainer it will just give you errors.
+
+```
+python -m detectron2.data.datasets.process_dataset datasets/coco/annotations/instances_train2017.json datasets/coco/train2017 coco_2017_train
+```
+
+There new JSON file is output to `detectron2/data/datasets/anno.json`
+
+For all license into or help please see the Detectron2 and BCNet github repos:
+
+- https://github.com/facebookresearch/detectron2
+
+- https://github.com/lkeab/BCNet
