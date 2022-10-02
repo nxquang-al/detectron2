@@ -345,7 +345,7 @@ _C.MODEL.ROI_MASK_HEAD.CONV_DIM = 256
 # Options: "" (no norm), "GN", "SyncBN".
 _C.MODEL.ROI_MASK_HEAD.NORM = ""
 # Whether to use class agnostic for mask prediction
-_C.MODEL.ROI_MASK_HEAD.CLS_AGNOSTIC_MASK = False
+_C.MODEL.ROI_MASK_HEAD.CLS_AGNOSTIC_MASK = True
 # Type of pooling operation applied to the incoming feature map for each RoI
 _C.MODEL.ROI_MASK_HEAD.POOLER_TYPE = "ROIAlignV2"
 
