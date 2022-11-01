@@ -136,7 +136,7 @@ class FCOS(nn.Module):
 
 
 
-    def forward(self, batched_inputs, click_points=[]):
+    def forward(self, batched_inputs):
         """
         Args:
             batched_inputs: a list, batched outputs of :class:`DatasetMapper` .
@@ -182,7 +182,7 @@ class FCOS(nn.Module):
             return self._forward_test(
                 features_list,
                 locations, box_cls, box_regression, 
-                centerness, batched_inputs, images, click_points
+                centerness, batched_inputs, images
             )
 
     def _forward_train(self, features_list, locations, box_cls, box_regression, centerness, gt_instances, batched_inputs, images):
@@ -212,7 +212,7 @@ class FCOS(nn.Module):
         }
         return losses
     
-    def _forward_test(self, features, locations, box_cls, box_regression, centerness, batched_inputs, images, click_points):
+    def _forward_test(self, features, locations, box_cls, box_regression, centerness, batched_inputs, images):
         instances = self.box_selector(
             locations, box_cls, box_regression, 
             centerness, batched_inputs, images
@@ -220,16 +220,7 @@ class FCOS(nn.Module):
         
         # mask
         assert not self.training
-        assert len(click_points) > 0
-        assert instances[0].has("pred_boxes") and instances[0].has("pred_classes")
-
-        try:
-            image_shape = batched_inputs[0].get('image').detach().cpu().numpy().astype(np.uint8).transpose(1, 2, 0).shape
-            self.object_selector = ObjectSelector(instances[0], image_shape, click_points[0])
-            instances[0] = self.object_selector.keepOnlySelectedObject()
-            
-        except:
-            raise Exception("Fail to select object")
+        assert instances[0].has("pred_boxes") and instances[0].has("pred_classes")C
         
         instances = self._forward_mask(features, instances)
         return self._postprocess(instances, batched_inputs, images.image_sizes)
