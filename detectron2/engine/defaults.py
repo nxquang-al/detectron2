@@ -294,7 +294,7 @@ class DefaultPredictor:
         self.input_format = cfg.INPUT.FORMAT
         assert self.input_format in ["RGB", "BGR"], self.input_format
 
-    def __call__(self, original_image, click_point):
+    def __call__(self, original_image):
         """
         Args:
             original_image (np.ndarray): an image of shape (H, W, C) (in BGR order).
@@ -312,11 +312,10 @@ class DefaultPredictor:
             height, width = original_image.shape[:2]
             image = self.aug.get_transform(original_image).apply_image(original_image)
             scale = int((image.shape[0]/height) + 0.5)
-            click_point = tuple([scale*x for x in click_point])
             image = torch.as_tensor(image.astype("float32").transpose(2, 0, 1))
 
             inputs = {"image": image, "height": height, "width": width}
-            predictions = self.model([inputs], [click_point])[0]
+            predictions = self.model([inputs])[0]
             return predictions
 
 
