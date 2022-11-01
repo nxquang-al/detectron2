@@ -13,7 +13,6 @@ from .build import META_ARCH_REGISTRY
 import torch.nn.functional as F
 
 from .inference_fcos import make_fcos_postprocessor
-from .inference_fcos import ObjectSelector
 from .loss_fcos import make_fcos_loss_evaluator
 
 from detectron2.layers import Scale
