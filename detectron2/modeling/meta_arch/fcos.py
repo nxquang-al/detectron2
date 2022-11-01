@@ -220,7 +220,7 @@ class FCOS(nn.Module):
         
         # mask
         assert not self.training
-        assert instances[0].has("pred_boxes") and instances[0].has("pred_classes")C
+        assert instances[0].has("pred_boxes") and instances[0].has("pred_classes")
         
         instances = self._forward_mask(features, instances)
         return self._postprocess(instances, batched_inputs, images.image_sizes)
