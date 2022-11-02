@@ -177,7 +177,6 @@ class FCOS(nn.Module):
             )
         else:
             #assert False
-            assert len(click_points) == len(batched_inputs)
             return self._forward_test(
                 features_list,
                 locations, box_cls, box_regression, 
