@@ -4,9 +4,11 @@ import logging
 import math
 from typing import List
 from torch import nn
+import cv2
 
 from detectron2.layers import ShapeSpec, batched_nms, cat
 from detectron2.structures import Boxes, ImageList, Instances, pairwise_iou
+
 
 def permute_to_N_HW_K(tensor, K):
     """
@@ -25,6 +27,7 @@ class FCOSPostProcessor(torch.nn.Module):
     Performs post-processing on the outputs of the RetinaNet boxes.
     This is only used in the testing.
     """
+
     def __init__(
         self,
         pre_nms_thresh,
@@ -33,7 +36,7 @@ class FCOSPostProcessor(torch.nn.Module):
         fpn_post_nms_top_n,
         min_size,
         num_classes,
-        bbox_aug_enabled=False
+        bbox_aug_enabled=False,
     ):
         """
         Arguments:
@@ -55,16 +58,15 @@ class FCOSPostProcessor(torch.nn.Module):
         self.bbox_aug_enabled = bbox_aug_enabled
 
     def forward_for_single_image(
-            self, locations, box_cls,
-            box_regression, centerness,
-            image_size):
+        self, locations, box_cls, box_regression, centerness, image_size
+    ):
         """
         Arguments:
             anchors: list[BoxList]
             box_cls: tensor of size N, A * C, H, W
             box_regression: tensor of size N, A * 4, H, W
         """
-        '''
+        """
         N, C, H, W = box_cls.shape
 
         # put in the same format as locations
@@ -74,38 +76,41 @@ class FCOSPostProcessor(torch.nn.Module):
         box_regression = box_regression.reshape(N, -1, 4)
         centerness = centerness.view(N, 1, H, W).permute(0, 2, 3, 1)
         centerness = centerness.reshape(N, -1).sigmoid()
-        '''
+        """
         boxes_all = []
         scores_all = []
         class_idxs_all = []
-        for i in range(len(box_cls)): # different feature levels
+        for i in range(len(box_cls)):  # different feature levels
             candidate_inds = box_cls[i].sigmoid() > self.pre_nms_thresh
             pre_nms_top_n = candidate_inds.reshape(1, -1).sum(1)
             pre_nms_top_n = pre_nms_top_n.clamp(max=self.pre_nms_top_n)
 
             per_box_cls = box_cls[i].sigmoid() * centerness[i].sigmoid()
-            per_candidate_inds = candidate_inds #[i]
+            per_candidate_inds = candidate_inds  # [i]
             per_box_cls = per_box_cls[per_candidate_inds]
             per_candidate_nonzeros = per_candidate_inds.nonzero()
             per_box_loc = per_candidate_nonzeros[:, 0]
-            per_class = per_candidate_nonzeros[:, 1] #+ 1
+            per_class = per_candidate_nonzeros[:, 1]  # + 1
             per_box_regression = box_regression[i]
             per_box_regression = per_box_regression[per_box_loc]
             per_locations = locations[i][per_box_loc]
-            per_pre_nms_top_n = pre_nms_top_n #[i]
+            per_pre_nms_top_n = pre_nms_top_n  # [i]
             if per_candidate_inds.sum().item() > per_pre_nms_top_n.item():
-                per_box_cls, top_k_indices = \
-                    per_box_cls.topk(per_pre_nms_top_n.item(), sorted=False)
+                per_box_cls, top_k_indices = per_box_cls.topk(
+                    per_pre_nms_top_n.item(), sorted=False
+                )
                 per_class = per_class[top_k_indices]
                 per_box_regression = per_box_regression[top_k_indices]
                 per_locations = per_locations[top_k_indices]
-
-            detections = torch.stack([
-                per_locations[:, 0] - per_box_regression[:, 0],
-                per_locations[:, 1] - per_box_regression[:, 1],
-                per_locations[:, 0] + per_box_regression[:, 2],
-                per_locations[:, 1] + per_box_regression[:, 3],
-            ], dim=1)
+            detections = torch.stack(
+                [
+                    per_locations[:, 0] - per_box_regression[:, 0],
+                    per_locations[:, 1] - per_box_regression[:, 1],
+                    per_locations[:, 0] + per_box_regression[:, 2],
+                    per_locations[:, 1] + per_box_regression[:, 3],
+                ],
+                dim=1,
+            )
 
             boxes_all.append(detections)
             scores_all.append(torch.sqrt(per_box_cls))
@@ -123,13 +128,17 @@ class FCOSPostProcessor(torch.nn.Module):
             result.scores = scores_all[keep]
             result.pred_classes = class_idxs_all[keep]
         else:
-            keep = keep[: self.fpn_post_nms_top_n] # now 100 for train, change it? Now I use all to train
+            keep = keep[
+                : self.fpn_post_nms_top_n
+            ]  # now 100 for train, change it? Now I use all to train
             result.proposal_boxes = Boxes(boxes_all[keep])
             result.objectness_logits = scores_all[keep]
 
         return result
 
-    def forward(self, locations, box_cls, box_regression, centerness, batched_inputs, images):
+    def forward(
+        self, locations, box_cls, box_regression, centerness, batched_inputs, images
+    ):
         """
         Arguments:
             anchors: list[list[BoxList]]
@@ -149,24 +158,35 @@ class FCOSPostProcessor(torch.nn.Module):
 
         for img_idx in range(image_num):
             image_size = images.image_sizes[img_idx]
-            box_cls_per_image = [box_cls_per_level[img_idx] for box_cls_per_level in box_cls]
-            box_regression_per_image = [box_regression_per_level[img_idx] for box_regression_per_level in box_regression]
+            box_cls_per_image = [
+                box_cls_per_level[img_idx] for box_cls_per_level in box_cls
+            ]
+            box_regression_per_image = [
+                box_regression_per_level[img_idx]
+                for box_regression_per_level in box_regression
+            ]
 
-            centerness_per_image = [centerness_per_level[img_idx] for centerness_per_level in centerness]
+            centerness_per_image = [
+                centerness_per_level[img_idx] for centerness_per_level in centerness
+            ]
             results_per_image = self.forward_for_single_image(
-                locations, box_cls_per_image, box_regression_per_image, centerness_per_image, tuple(image_size)
+                locations,
+                box_cls_per_image,
+                box_regression_per_image,
+                centerness_per_image,
+                tuple(image_size),
             )
             results.append(results_per_image)
 
         return results
 
-def make_fcos_postprocessor(config): #, is_train):
+
+def make_fcos_postprocessor(config):  # , is_train):
     pre_nms_thresh = config.MODEL.FCOS.INFERENCE_TH
     pre_nms_top_n = config.MODEL.FCOS.PRE_NMS_TOP_N
     nms_thresh = config.MODEL.FCOS.NMS_TH
     fpn_post_nms_top_n = config.TEST.DETECTIONS_PER_IMAGE
-    bbox_aug_enabled = False #config.TEST.BBOX_AUG.ENABLED
-
+    bbox_aug_enabled = False  # config.TEST.BBOX_AUG.ENABLED
     box_selector = FCOSPostProcessor(
         pre_nms_thresh=pre_nms_thresh,
         pre_nms_top_n=pre_nms_top_n,
@@ -174,8 +194,73 @@ def make_fcos_postprocessor(config): #, is_train):
         fpn_post_nms_top_n=fpn_post_nms_top_n,
         min_size=0,
         num_classes=config.MODEL.FCOS.NUM_CLASSES,
-        bbox_aug_enabled=bbox_aug_enabled
+        bbox_aug_enabled=bbox_aug_enabled,
     )
 
     return box_selector
 
+
+class ObjectSelector:
+    """
+    Select only the object that user has clicked on
+    """
+
+    def __init__(self, instances, image_shape, click_point):
+        self.instances = instances
+        self.click_point = click_point  # (y,x)
+        self.selected_idx = None
+        self.image_shape = image_shape
+        self.getBoxIdx()
+
+    def getBoxIdx(self):
+        """
+        Get Object index at clicked postion
+        If there are multiple objects, get the highest-score one
+        If there is no object at that position, return None
+        Return:
+            Index of object, or None
+        """
+        pred_boxes = self.instances.pred_boxes
+
+        indexes = []
+        max_score = 0
+        for idx in range(pred_boxes.__len__()):
+            x0, y0, x1, y1 = pred_boxes[idx].tensor.tolist()[0]
+            y, x = self.click_point
+            if y >= y0 and y <= y1 and x >= x0 and x <= x1:
+                indexes.append(idx)
+
+        for idx in indexes:
+            if self.instances.scores[idx].item() > max_score:
+                self.selected_idx = idx
+                max_score = self.instances.scores[idx].item()
+
+        return self.selected_idx
+
+    def keepOnlySelectedObject(self) -> "Instances":
+        """
+        Modify instances -> instance: only 1 box, 1 cls, and 1 score
+        Return:
+            A "list" of instances with only 1 instance, which user has selected
+        """
+        if self.selected_idx is None:
+            # If there is no object at clicked position -> return Instances of 0 objects
+            return Instances(self.image_shape[:2])
+        if (
+            self.selected_idx >= self.instances.pred_boxes.__len__()
+            or self.selected_idx <= -self.instances.pred_boxes.__len__()
+        ):
+            return Instances(self.image_shape[:2])
+        selected_box = self.instances.pred_boxes[self.selected_idx]
+        selected_cls = torch.unsqueeze(
+            self.instances.pred_classes[self.selected_idx], 0
+        )  # 0-d to 1-d tensor
+        selected_score = torch.unsqueeze(self.instances.scores[self.selected_idx], 0)
+
+        # Create new instances with only 1 object (1 instance, or num_instances=1)
+        self.instances = Instances(self.image_shape[:2])
+        self.instances.pred_boxes = selected_box
+        self.instances.pred_classes = selected_cls
+        self.instances.scores = selected_score
+
+        return self.instances
