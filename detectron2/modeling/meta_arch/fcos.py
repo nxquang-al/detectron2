@@ -1,7 +1,6 @@
 import logging
 import math
 import torch
-import numpy as np
 from torch import nn
 
 from detectron2.structures import Boxes, ImageList, Instances, pairwise_iou
@@ -13,6 +12,7 @@ from .build import META_ARCH_REGISTRY
 import torch.nn.functional as F
 
 from .inference_fcos import make_fcos_postprocessor
+from .inference_fcos import ObjectSelector
 from .loss_fcos import make_fcos_loss_evaluator
 
 from detectron2.layers import Scale
@@ -25,6 +25,11 @@ from ..proposal_generator.proposal_utils import add_ground_truth_to_proposals
 from ..matcher import Matcher
 from detectron2.utils.events import get_event_storage
 from ..postprocessing import detector_postprocess
+
+import numpy as np
+
+
+
 
 __all__ = ["FCOS"]
 
@@ -77,7 +82,7 @@ class FCOS(nn.Module):
 
         self.device = torch.device(cfg.MODEL.DEVICE)
         self.backbone = build_backbone(cfg)
-        self.in_features              = cfg.MODEL.FCOS.IN_FEATURES
+        self.in_features = cfg.MODEL.FCOS.IN_FEATURES
     
         self.num_classes = cfg.MODEL.FCOS.NUM_CLASSES
         backbone_shape = self.backbone.output_shape()
@@ -92,6 +97,9 @@ class FCOS(nn.Module):
         self.loss_evaluator = loss_evaluator
         self.fpn_strides = cfg.MODEL.FCOS.FPN_STRIDES
         self.head = FCOSHead(cfg, feature_shapes[0].channels)
+        
+        # a selector to keep only 1 object that user clicked on and remove others
+        self.object_selector = None
 
         # train on voc or non-voc or all
         self.train_part = cfg.MODEL.FCOS.TRAIN_PART
@@ -135,7 +143,7 @@ class FCOS(nn.Module):
 
 
 
-    def forward(self, batched_inputs):
+    def forward(self, batched_inputs, c_iter, max_iter, click_points=[]):
         """
         Args:
             batched_inputs: a list, batched outputs of :class:`DatasetMapper` .
@@ -168,22 +176,24 @@ class FCOS(nn.Module):
         features_list = [features[f] for f in self.in_features]
         box_cls, box_regression, centerness = self.head(features_list)
         locations = self.compute_locations(features_list)
+ 
         if self.training:
             return self._forward_train(
                 features_list,
                 locations, box_cls, 
                 box_regression, 
-                centerness, gt_instances, batched_inputs, images
+                centerness, gt_instances, batched_inputs, images, c_iter, max_iter
             )
         else:
             #assert False
+            assert len(click_points) == len(batched_inputs)
             return self._forward_test(
                 features_list,
                 locations, box_cls, box_regression, 
-                centerness, batched_inputs, images
+                centerness, batched_inputs, images, click_points
             )
 
-    def _forward_train(self, features_list, locations, box_cls, box_regression, centerness, gt_instances, batched_inputs, images):
+    def _forward_train(self, features_list, locations, box_cls, box_regression, centerness, gt_instances, batched_inputs, images, c_iter, max_iter):
         loss_box_cls, loss_box_reg, loss_centerness = self.loss_evaluator(
             locations, box_cls, box_regression, centerness, gt_instances
         )
@@ -197,7 +207,7 @@ class FCOS(nn.Module):
         #print('fcos.py 200 proposals after label_sample:', proposals)
         del gt_instances
         loss_mask, loss_mask_bo, loss_boundary, loss_boundary_bo = self._forward_mask(features_list, proposals)
-        # loss_rate = (float(c_iter)/max_iter) * 1.0
+        loss_rate = (float(c_iter)/max_iter) * 1.0
         #print('loss rate:', loss_rate)
         losses = {
             "loss_cls": loss_box_cls,
@@ -210,16 +220,27 @@ class FCOS(nn.Module):
         }
         return losses
     
-    def _forward_test(self, features, locations, box_cls, box_regression, centerness, batched_inputs, images):
+    def _forward_test(self, features, locations, box_cls, box_regression, centerness, batched_inputs, images, click_points):
         instances = self.box_selector(
             locations, box_cls, box_regression, 
             centerness, batched_inputs, images
         )
+
+
+        assert not self.training
+        assert len(click_points) > 0
+        assert instances[0].has("pred_boxes") and instances[0].has("pred_classes")
+
+
+        # Let user select only 1 object in the region
+        try:
+            image_shape = batched_inputs[0]['image'].detach().cpu().numpy().astype(np.uint8).transpose(1, 2, 0).shape
+            self.object_selector = ObjectSelector(instances[0], image_shape, click_points[0])
+            instances[0] = self.object_selector.keepOnlySelectedObject()
+        except:
+            raise Exception("Fail to select object")
         
         # mask
-        assert not self.training
-        assert instances[0].has("pred_boxes") and instances[0].has("pred_classes")
-        
         instances = self._forward_mask(features, instances)
         return self._postprocess(instances, batched_inputs, images.image_sizes)
 
@@ -381,7 +402,7 @@ class FCOS(nn.Module):
         """
         Rescale the output instances to the target size.
         """
-        # note: private function; subject to changes
+        # note: private function; subject to changes 
         processed_results = []
         for results_per_image, input_per_image, image_size in zip(
             instances, batched_inputs, image_sizes
